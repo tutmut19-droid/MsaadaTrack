@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { addPending, syncPending } from "./offlineQueue";
 
 type Beneficiary = {
   id: string;
@@ -196,12 +197,33 @@ export default function Home() {
     await supabase.auth.signOut();
   }
 
+  useEffect(() => {
+  const sync = async () => {
+    if (!navigator.onLine) return;
+    const n = await syncPending(supabase);
+    if (n > 0) setSuccessMsg(n + ' saved entries uploaded.');
+  };
+  sync();
+  window.addEventListener('online', sync);
+  return () => window.removeEventListener('online', sync);
+}, []);
   async function handleRegisterBeneficiary(e: React.FormEvent) {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
     if (!fullName.trim()) return;
 
+    if (!navigator.onLine) {
+  addPending({
+    full_name: fullName.trim(),
+    national_id: nationalId.trim() || null,
+    phone: phone.trim() || null,
+    location: location.trim() || null,
+    household_size: Number(householdSize) || 1,
+  });
+  setSuccessMsg('No internet. Saved on this phone. It will upload when you are back online.');
+  return;
+}
     setLoading(true);
     const { error } = await supabase.from('beneficiaries').insert([
       {
