@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { addPending, syncPending } from "./offlineQueue";
+import { addPending, syncPending, addPendingDistribution, syncPendingDistributions } from "./offlineQueue";
 
 type Beneficiary = {
   id: string;
@@ -201,7 +201,11 @@ export default function Home() {
   const sync = async () => {
     if (!navigator.onLine) return;
     const n = await syncPending(supabase);
-    if (n > 0) setSuccessMsg(n + ' saved entries uploaded.');
+const d = await syncPendingDistributions(supabase);
+if (n + d > 0) {
+  setSuccessMsg((n + d) + ' saved entries uploaded.');
+  fetchAllData();
+}
   };
   sync();
   window.addEventListener('online', sync);
@@ -260,6 +264,19 @@ export default function Home() {
       return;
     }
 
+   if (!navigator.onLine) {
+  addPendingDistribution({
+    beneficiary_id: selectedBeneficiary,
+    aid_item_id: selectedAidItem,
+    quantity: Number(distQuantity),
+    notes: distNotes.trim() || null,
+  });
+  setDistQuantity(1);
+  setDistNotes('');
+  setDistributionBeneficiarySearch('');
+  setSuccessMsg('No internet. Distribution saved on this phone. It will upload when you are back online.');
+  return;
+} 
     setLoading(true);
     const { error } = await supabase.from('distributions').insert([
       {
